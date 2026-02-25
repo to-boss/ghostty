@@ -36,8 +36,8 @@ public partial class MainWindow : FluentWindow
 
         if (!_ghosttyApp.Initialize(colorScheme))
         {
-            MessageBox.Show("Failed to initialize Ghostty.", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show("Failed to initialize Ghostty.", "Error",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             Close();
             return;
         }
@@ -54,13 +54,13 @@ public partial class MainWindow : FluentWindow
     {
         if (_ghosttyApp != null && _ghosttyApp.NeedsConfirmQuit())
         {
-            var result = MessageBox.Show(
+            var result = System.Windows.MessageBox.Show(
                 "A process is still running. Are you sure you want to close?",
                 "Ghostty",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Warning);
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
 
-            if (result != MessageBoxResult.Yes)
+            if (result != System.Windows.MessageBoxResult.Yes)
             {
                 e.Cancel = true;
                 return;

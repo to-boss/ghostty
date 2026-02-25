@@ -66,7 +66,7 @@ public class TerminalControl : HwndHost
 
         // Hook into the HwndSource for raw Win32 messages
         var source = HwndSource.FromHwnd(hwndParent.Handle);
-        source?.AddHook(WndProc);
+        source?.AddHook(WndProcHook);
 
         return new HandleRef(this, _hwnd);
     }
@@ -140,7 +140,7 @@ public class TerminalControl : HwndHost
         NativeMethods.GhosttySurfaceSetContentScale(_surface, dpiScale, dpiScale);
     }
 
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (_surface == IntPtr.Zero)
             return IntPtr.Zero;

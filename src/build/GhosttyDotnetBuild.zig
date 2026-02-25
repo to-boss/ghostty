@@ -22,7 +22,7 @@ pub fn init(
 
     const dotnet_config = "Release";
     const project_dir = "windows/src/Ghostty";
-    const output_dir = b.fmt("{s}/bin/{s}/net9.0-windows", .{ project_dir, dotnet_config });
+    const output_dir = b.fmt("{s}/bin/{s}/net9.0-windows10.0.18362.0", .{ project_dir, dotnet_config });
 
     // Our step to build the Ghostty Windows app via dotnet build.
     const build_step = build: {
@@ -49,10 +49,12 @@ pub fn init(
         const step = RunStep.create(b, "copy windows app");
         step.has_side_effects = true;
 
-        // Use xcopy on Windows to copy the output directory
+        // Use xcopy on Windows to copy the output directory.
+        // The destination must use backslashes — xcopy interprets
+        // forward slashes as option flags.
         step.addArgs(&.{ "xcopy", "/E", "/I", "/Y" });
         step.addFileArg(b.path(output_dir));
-        step.addArg(b.fmt("{s}/Ghostty", .{b.install_path}));
+        step.addArg(b.fmt("{s}\\Ghostty", .{b.install_path}));
         step.step.dependOn(&build_step.step);
         break :copy step;
     };
