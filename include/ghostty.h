@@ -15,7 +15,12 @@ extern "C" {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#else
 #include <sys/types.h>
+#endif
 
 //-------------------------------------------------------------------
 // Macros
@@ -38,6 +43,7 @@ typedef enum {
   GHOSTTY_PLATFORM_INVALID,
   GHOSTTY_PLATFORM_MACOS,
   GHOSTTY_PLATFORM_IOS,
+  GHOSTTY_PLATFORM_WINDOWS,
 } ghostty_platform_e;
 
 typedef enum {
@@ -426,9 +432,14 @@ typedef struct {
   void* uiview;
 } ghostty_platform_ios_s;
 
+typedef struct {
+  void* hwnd;
+} ghostty_platform_windows_s;
+
 typedef union {
   ghostty_platform_macos_s macos;
   ghostty_platform_ios_s ios;
+  ghostty_platform_windows_s windows;
 } ghostty_platform_u;
 
 typedef enum {
@@ -979,6 +990,8 @@ typedef void (*ghostty_runtime_close_surface_cb)(void*, bool);
 typedef bool (*ghostty_runtime_action_cb)(ghostty_app_t,
                                           ghostty_target_s,
                                           ghostty_action_s);
+typedef void (*ghostty_runtime_gl_make_current_cb)(void*);
+typedef void (*ghostty_runtime_gl_swap_buffers_cb)(void*);
 
 typedef struct {
   void* userdata;
@@ -989,6 +1002,8 @@ typedef struct {
   ghostty_runtime_confirm_read_clipboard_cb confirm_read_clipboard_cb;
   ghostty_runtime_write_clipboard_cb write_clipboard_cb;
   ghostty_runtime_close_surface_cb close_surface_cb;
+  ghostty_runtime_gl_make_current_cb gl_make_current_cb;
+  ghostty_runtime_gl_swap_buffers_cb gl_swap_buffers_cb;
 } ghostty_runtime_config_s;
 
 // apprt.ipc.Target.Key

@@ -140,8 +140,13 @@ pub fn build(b: *std.Build) !void {
         // build on macOS this way ironically so we need to fix that.
         if (!config.target.result.os.tag.isDarwin()) {
             libghostty_shared.installHeader(); // Only need one header
-            libghostty_shared.install("libghostty.so");
-            libghostty_static.install("libghostty.a");
+            if (config.target.result.os.tag == .windows) {
+                libghostty_shared.install("ghostty.dll");
+                libghostty_static.install("ghostty.lib");
+            } else {
+                libghostty_shared.install("libghostty.so");
+                libghostty_static.install("libghostty.a");
+            }
         }
     }
 
@@ -176,6 +181,16 @@ pub fn build(b: *std.Build) !void {
         );
         if (config.emit_macos_app) {
             macos_app.install();
+        }
+    }
+
+    // Windows only artifacts.
+    if (config.target.result.os.tag == .windows and config.app_runtime == .none) {
+        const dotnet_app = try buildpkg.GhosttyDotnetBuild.init(b, &config, .{
+            .lib = &libghostty_shared,
+        });
+        if (config.emit_windows_app) {
+            dotnet_app.install();
         }
     }
 
