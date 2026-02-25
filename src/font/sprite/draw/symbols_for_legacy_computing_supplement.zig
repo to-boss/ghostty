@@ -95,7 +95,7 @@ pub fn draw1CD00_1CDE5(
     // that this is static data that is embedded in the binary.
     const octants_len = octant_max - octant_min + 1;
     const octants: [octants_len]Octant = comptime octants: {
-        @setEvalBranchQuota(10_000);
+        @setEvalBranchQuota(100_000);
 
         var result: [octants_len]Octant = @splat(.{});
         var i: usize = 0;
@@ -113,7 +113,8 @@ pub fn draw1CD00_1CDE5(
             // at the end are keys into our packed struct. Since we're
             // at comptime we can metaprogram it all.
             const idx = std.mem.indexOfScalar(u8, line, '-').?;
-            for (line[idx + 1 ..]) |c| @field(current, &.{c}) = true;
+            const digits = std.mem.trimRight(u8, line[idx + 1 ..], "\r");
+            for (digits) |c| @field(current, &[_:0]u8{c}) = true;
         }
 
         assert(i == octants_len);

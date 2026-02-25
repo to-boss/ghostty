@@ -5,6 +5,7 @@
 //! print.
 const CodepointWidth = @This();
 
+const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
@@ -104,6 +105,8 @@ fn stepNoop(ptr: *anyopaque) Benchmark.Error!void {
 extern "c" fn wcwidth(c: u32) c_int;
 
 fn stepWcwidth(ptr: *anyopaque) Benchmark.Error!void {
+    // wcwidth is a POSIX function not available on Windows.
+    if (comptime builtin.os.tag == .windows) return;
     const self: *CodepointWidth = @ptrCast(@alignCast(ptr));
 
     const f = self.data_f orelse return;
