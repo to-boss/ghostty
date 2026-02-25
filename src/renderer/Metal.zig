@@ -175,6 +175,15 @@ fn displayCallback(renderer: *Renderer) align(8) void {
     };
 }
 
+/// Called when the screen size changes. Metal doesn't need this since
+/// the surface size is obtained from the drawable, but OpenGL uses it
+/// to set glViewport on embedded apprt.
+pub fn setScreenSize(self: *Metal, width: u32, height: u32) void {
+    _ = self;
+    _ = width;
+    _ = height;
+}
+
 /// Actions taken before doing anything in `drawFrame`.
 ///
 /// Right now we use this to start an AutoreleasePool.

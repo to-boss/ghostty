@@ -1202,6 +1202,14 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                 // Update our terminal state
                 try self.terminal_state.update(self.alloc, state.terminal);
 
+                log.debug("updateFrame: terminal dirty={s} screen_size={}x{} cursor=({},{})", .{
+                    @tagName(self.terminal_state.dirty),
+                    state.terminal.cols,
+                    state.terminal.rows,
+                    state.terminal.screens.active.cursor.x,
+                    state.terminal.screens.active.cursor.y,
+                });
+
                 // If our terminal state is dirty at all we need to redo
                 // the viewport search.
                 if (self.terminal_state.dirty != .false) {
@@ -1479,6 +1487,14 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                 self.cells_rebuilt or
                 self.hasAnimations() or
                 sync;
+
+            log.debug("drawFrame(generic): needs_redraw={} cells_rebuilt={} size_changed={} surface={}x{}", .{
+                needs_redraw,
+                self.cells_rebuilt,
+                size_changed,
+                surface_size.width,
+                surface_size.height,
+            });
 
             if (!needs_redraw) {
                 // We still need to present the last target again, because the
@@ -1926,6 +1942,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             // We only actually need the padding from this,
             // everything else is derived elsewhere.
             self.size.padding = size.padding;
+
+            // Notify the graphics API of the new screen size so it can
+            // update API-specific state (e.g. glViewport for OpenGL).
+            self.api.setScreenSize(size.screen.width, size.screen.height);
 
             self.updateScreenSizeUniforms();
 
