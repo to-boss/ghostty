@@ -7,7 +7,7 @@ namespace Ghostty.Interop;
 /// </summary>
 internal static partial class NativeMethods
 {
-    private const string GhosttyLib = "ghostty";
+    private const string GhosttyLib = "libghostty";
 
     // --- Initialization ---
 
@@ -46,6 +46,12 @@ internal static partial class NativeMethods
         IntPtr value,
         [MarshalAs(UnmanagedType.LPStr)] string key,
         nuint keyLen);
+
+    [DllImport(GhosttyLib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ghostty_config_diagnostics_count")]
+    public static extern uint GhosttyConfigDiagnosticsCount(IntPtr config);
+
+    [DllImport(GhosttyLib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ghostty_config_get_diagnostic")]
+    public static extern GhosttyDiagnostic GhosttyConfigGetDiagnostic(IntPtr config, uint index);
 
     [DllImport(GhosttyLib, CallingConvention = CallingConvention.Cdecl, EntryPoint = "ghostty_config_open_path")]
     public static extern GhosttyString GhosttyConfigOpenPath();

@@ -347,6 +347,13 @@ public struct GhosttyClipboardContent
     public IntPtr Data;
 }
 
+// ghostty_diagnostic_s
+[StructLayout(LayoutKind.Sequential)]
+public struct GhosttyDiagnostic
+{
+    public IntPtr Message;
+}
+
 // ghostty_string_s
 [StructLayout(LayoutKind.Sequential)]
 public struct GhosttyString

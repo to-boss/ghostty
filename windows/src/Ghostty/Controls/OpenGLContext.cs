@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Ghostty.Helpers;
 
 namespace Ghostty.Controls;
@@ -7,6 +8,8 @@ namespace Ghostty.Controls;
 /// </summary>
 public sealed class OpenGLContext : IDisposable
 {
+    private const string Tag = "OpenGL";
+
     private IntPtr _hwnd;
     private IntPtr _hdc;
     private IntPtr _hglrc;
@@ -18,14 +21,20 @@ public sealed class OpenGLContext : IDisposable
 
     public bool Initialize(IntPtr hwnd)
     {
+        Logger.LogInfo(Tag, $"Initialize: hwnd=0x{hwnd:X}");
         _hwnd = hwnd;
+
         _hdc = Win32Interop.GetDC(hwnd);
         if (_hdc == IntPtr.Zero)
+        {
+            Logger.LogWin32Error(Tag, "GetDC failed");
             return false;
+        }
+        Logger.LogInfo(Tag, $"GetDC: hdc=0x{_hdc:X}");
 
         var pfd = new Win32Interop.PixelFormatDescriptor
         {
-            nSize = (ushort)System.Runtime.InteropServices.Marshal.SizeOf<Win32Interop.PixelFormatDescriptor>(),
+            nSize = (ushort)Marshal.SizeOf<Win32Interop.PixelFormatDescriptor>(),
             nVersion = 1,
             dwFlags = Win32Interop.PFD_DRAW_TO_WINDOW |
                       Win32Interop.PFD_SUPPORT_OPENGL |
@@ -39,14 +48,26 @@ public sealed class OpenGLContext : IDisposable
 
         var pixelFormat = Win32Interop.ChoosePixelFormat(_hdc, ref pfd);
         if (pixelFormat == 0)
+        {
+            Logger.LogWin32Error(Tag, "ChoosePixelFormat failed");
             return false;
+        }
+        Logger.LogInfo(Tag, $"ChoosePixelFormat: format={pixelFormat}");
 
         if (!Win32Interop.SetPixelFormat(_hdc, pixelFormat, ref pfd))
+        {
+            Logger.LogWin32Error(Tag, "SetPixelFormat failed");
             return false;
+        }
+        Logger.LogInfo(Tag, "SetPixelFormat: success");
 
         _hglrc = Win32Interop.wglCreateContext(_hdc);
         if (_hglrc == IntPtr.Zero)
+        {
+            Logger.LogWin32Error(Tag, "wglCreateContext failed");
             return false;
+        }
+        Logger.LogInfo(Tag, $"wglCreateContext: hglrc=0x{_hglrc:X}");
 
         return true;
     }
@@ -55,7 +76,10 @@ public sealed class OpenGLContext : IDisposable
     {
         if (_hdc == IntPtr.Zero || _hglrc == IntPtr.Zero)
             return false;
-        return Win32Interop.wglMakeCurrent(_hdc, _hglrc);
+        var ok = Win32Interop.wglMakeCurrent(_hdc, _hglrc);
+        if (!ok)
+            Logger.LogWin32Error(Tag, "wglMakeCurrent failed");
+        return ok;
     }
 
     public void ReleaseCurrent()
@@ -67,7 +91,10 @@ public sealed class OpenGLContext : IDisposable
     {
         if (_hdc == IntPtr.Zero)
             return false;
-        return Win32Interop.SwapBuffers(_hdc);
+        var ok = Win32Interop.SwapBuffers(_hdc);
+        if (!ok)
+            Logger.LogWin32Error(Tag, "SwapBuffers failed");
+        return ok;
     }
 
     public void Dispose()
@@ -75,6 +102,8 @@ public sealed class OpenGLContext : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+
+        Logger.LogInfo(Tag, "Disposing OpenGLContext");
 
         if (_hglrc != IntPtr.Zero)
         {

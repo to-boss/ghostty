@@ -14,6 +14,8 @@ namespace Ghostty.Controls;
 /// </summary>
 public class TerminalControl : HwndHost
 {
+    private const string LogTag = "Terminal";
+
     private readonly GhosttyApp _ghosttyApp;
     private IntPtr _hwnd;
     private IntPtr _surface;
@@ -31,7 +33,10 @@ public class TerminalControl : HwndHost
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
+        Logger.LogInfo(LogTag, $"BuildWindowCore: parent=0x{hwndParent.Handle:X}, size={ActualWidth}x{ActualHeight}");
+
         var hInstance = Win32Interop.GetModuleHandle(null);
+        Logger.LogInfo(LogTag, $"hInstance=0x{hInstance:X}");
 
         // Create a child window to host the terminal
         _hwnd = Win32Interop.CreateWindowEx(
@@ -48,12 +53,20 @@ public class TerminalControl : HwndHost
             IntPtr.Zero);
 
         if (_hwnd == IntPtr.Zero)
+        {
+            Logger.LogWin32Error(LogTag, "CreateWindowEx failed");
             throw new InvalidOperationException("Failed to create child window.");
+        }
+        Logger.LogInfo(LogTag, $"Child HWND created: 0x{_hwnd:X}");
 
         // Initialize OpenGL context
         _glContext = new OpenGLContext();
         if (!_glContext.Initialize(_hwnd))
+        {
+            Logger.LogCritical(LogTag, "OpenGL context initialization failed");
             throw new InvalidOperationException("Failed to initialize OpenGL context.");
+        }
+        Logger.LogInfo(LogTag, "OpenGL context initialized");
 
         // Make current so we can create the surface
         _glContext.MakeCurrent();
@@ -68,11 +81,14 @@ public class TerminalControl : HwndHost
         var source = HwndSource.FromHwnd(hwndParent.Handle);
         source?.AddHook(WndProcHook);
 
+        Logger.LogInfo(LogTag, "BuildWindowCore complete");
         return new HandleRef(this, _hwnd);
     }
 
     private void CreateSurface()
     {
+        Logger.LogInfo(LogTag, "CreateSurface: begin");
+
         var surfaceConfig = NativeMethods.GhosttySurfaceConfigNew();
 
         // Set up Windows platform
@@ -89,20 +105,31 @@ public class TerminalControl : HwndHost
 
         surfaceConfig.Context = GhosttySurfaceContext.Window;
 
+        Logger.LogInfo(LogTag, $"Surface config: hwnd=0x{_hwnd:X}, dpi={dpiScale}, context={surfaceConfig.Context}");
+
         _surface = NativeMethods.GhosttySurfaceNew(_ghosttyApp.AppHandle, ref surfaceConfig);
         if (_surface == IntPtr.Zero)
+        {
+            Logger.LogCritical(LogTag, "ghostty_surface_new returned null");
             throw new InvalidOperationException("Failed to create ghostty surface.");
+        }
+        Logger.LogInfo(LogTag, $"Surface created: 0x{_surface:X}");
 
         // Set initial size
         var width = (uint)Math.Max(1, ActualWidth * dpiScale);
         var height = (uint)Math.Max(1, ActualHeight * dpiScale);
+        Logger.LogInfo(LogTag, $"Initial size: {width}x{height} (dpi={dpiScale})");
         NativeMethods.GhosttySurfaceSetSize(_surface, width, height);
         NativeMethods.GhosttySurfaceSetContentScale(_surface, dpiScale, dpiScale);
         NativeMethods.GhosttySurfaceSetFocus(_surface, true);
+
+        Logger.LogInfo(LogTag, "CreateSurface: complete");
     }
 
     protected override void DestroyWindowCore(HandleRef hwnd)
     {
+        Logger.LogInfo(LogTag, "DestroyWindowCore");
+
         if (_surface != IntPtr.Zero)
         {
             NativeMethods.GhosttySurfaceFree(_surface);
@@ -280,6 +307,7 @@ public class TerminalControl : HwndHost
         if (!_disposed)
         {
             _disposed = true;
+            Logger.LogInfo(LogTag, "Disposing TerminalControl");
 
             if (_surface != IntPtr.Zero)
             {

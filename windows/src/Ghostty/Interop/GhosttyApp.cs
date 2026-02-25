@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
+using Ghostty.Helpers;
 
 namespace Ghostty.Interop;
 
@@ -10,6 +10,8 @@ namespace Ghostty.Interop;
 /// </summary>
 public sealed class GhosttyApp : IDisposable
 {
+    private const string Tag = "GhosttyApp";
+
     private IntPtr _app;
     private IntPtr _config;
     private bool _disposed;
@@ -40,57 +42,111 @@ public sealed class GhosttyApp : IDisposable
 
     public bool Initialize(GhosttyColorScheme colorScheme)
     {
-        // Initialize ghostty
-        var result = NativeMethods.GhosttyInit(0, IntPtr.Zero);
-        if (result != 0)
-            return false;
-
-        // Create and load config
-        _config = NativeMethods.GhosttyConfigNew();
-        if (_config == IntPtr.Zero)
-            return false;
-
-        NativeMethods.GhosttyConfigLoadDefaultFiles(_config);
-        NativeMethods.GhosttyConfigLoadRecursiveFiles(_config);
-        NativeMethods.GhosttyConfigFinalize(_config);
-
-        // Set up callbacks
-        _wakeupDelegate = OnWakeup;
-        _actionDelegate = OnAction;
-        _readClipboardDelegate = OnReadClipboard;
-        _confirmReadClipboardDelegate = OnConfirmReadClipboard;
-        _writeClipboardDelegate = OnWriteClipboard;
-        _closeSurfaceDelegate = OnCloseSurface;
-        _glMakeCurrentDelegate = OnGlMakeCurrent;
-        _glSwapBuffersDelegate = OnGlSwapBuffers;
-
-        var runtimeConfig = new GhosttyRuntimeConfig
+        try
         {
-            Userdata = IntPtr.Zero,
-            SupportsSelectionClipboard = false,
-            WakeupCb = Marshal.GetFunctionPointerForDelegate(_wakeupDelegate),
-            ActionCb = Marshal.GetFunctionPointerForDelegate(_actionDelegate),
-            ReadClipboardCb = Marshal.GetFunctionPointerForDelegate(_readClipboardDelegate),
-            ConfirmReadClipboardCb = Marshal.GetFunctionPointerForDelegate(_confirmReadClipboardDelegate),
-            WriteClipboardCb = Marshal.GetFunctionPointerForDelegate(_writeClipboardDelegate),
-            CloseSurfaceCb = Marshal.GetFunctionPointerForDelegate(_closeSurfaceDelegate),
-            GlMakeCurrentCb = Marshal.GetFunctionPointerForDelegate(_glMakeCurrentDelegate),
-            GlSwapBuffersCb = Marshal.GetFunctionPointerForDelegate(_glSwapBuffersDelegate),
-        };
+            Logger.LogInfo(Tag, "Calling ghostty_init...");
+            var result = NativeMethods.GhosttyInit(0, IntPtr.Zero);
+            Logger.LogInfo(Tag, $"ghostty_init returned {result}");
+            if (result != 0)
+            {
+                Logger.LogCritical(Tag, $"ghostty_init failed with code {result}");
+                return false;
+            }
 
-        // Create the app
-        _app = NativeMethods.GhosttyAppNew(ref runtimeConfig, _config);
-        if (_app == IntPtr.Zero)
+            // Log version info
+            try
+            {
+                var info = NativeMethods.GhosttyInfo();
+                var version = info.Version != IntPtr.Zero && (ulong)info.VersionLen > 0
+                    ? Marshal.PtrToStringUTF8(info.Version, (int)info.VersionLen) ?? "unknown"
+                    : "unknown";
+                Logger.LogInfo(Tag, $"libghostty version={version} build={info.BuildMode}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(Tag, $"Failed to read version info: {ex.Message}");
+            }
+
+            Logger.LogInfo(Tag, "Creating config...");
+            _config = NativeMethods.GhosttyConfigNew();
+            if (_config == IntPtr.Zero)
+            {
+                Logger.LogCritical(Tag, "ghostty_config_new returned null");
+                return false;
+            }
+            Logger.LogInfo(Tag, $"Config handle: 0x{_config:X}");
+
+            Logger.LogInfo(Tag, "Loading config files...");
+            NativeMethods.GhosttyConfigLoadDefaultFiles(_config);
+            NativeMethods.GhosttyConfigLoadRecursiveFiles(_config);
+            NativeMethods.GhosttyConfigFinalize(_config);
+            Logger.LogInfo(Tag, "Config finalized");
+
+            // Check config diagnostics
+            var diagCount = NativeMethods.GhosttyConfigDiagnosticsCount(_config);
+            if (diagCount > 0)
+            {
+                Logger.LogWarning(Tag, $"Config has {diagCount} diagnostic(s):");
+                for (uint i = 0; i < diagCount; i++)
+                {
+                    var diag = NativeMethods.GhosttyConfigGetDiagnostic(_config, i);
+                    var msg = diag.Message != IntPtr.Zero
+                        ? Marshal.PtrToStringUTF8(diag.Message) ?? "(null)"
+                        : "(null)";
+                    Logger.LogWarning(Tag, $"  [{i}] {msg}");
+                }
+            }
+            else
+            {
+                Logger.LogInfo(Tag, "Config has no diagnostics");
+            }
+
+            Logger.LogInfo(Tag, "Setting up callbacks...");
+            _wakeupDelegate = OnWakeup;
+            _actionDelegate = OnAction;
+            _readClipboardDelegate = OnReadClipboard;
+            _confirmReadClipboardDelegate = OnConfirmReadClipboard;
+            _writeClipboardDelegate = OnWriteClipboard;
+            _closeSurfaceDelegate = OnCloseSurface;
+            _glMakeCurrentDelegate = OnGlMakeCurrent;
+            _glSwapBuffersDelegate = OnGlSwapBuffers;
+
+            var runtimeConfig = new GhosttyRuntimeConfig
+            {
+                Userdata = IntPtr.Zero,
+                SupportsSelectionClipboard = false,
+                WakeupCb = Marshal.GetFunctionPointerForDelegate(_wakeupDelegate),
+                ActionCb = Marshal.GetFunctionPointerForDelegate(_actionDelegate),
+                ReadClipboardCb = Marshal.GetFunctionPointerForDelegate(_readClipboardDelegate),
+                ConfirmReadClipboardCb = Marshal.GetFunctionPointerForDelegate(_confirmReadClipboardDelegate),
+                WriteClipboardCb = Marshal.GetFunctionPointerForDelegate(_writeClipboardDelegate),
+                CloseSurfaceCb = Marshal.GetFunctionPointerForDelegate(_closeSurfaceDelegate),
+                GlMakeCurrentCb = Marshal.GetFunctionPointerForDelegate(_glMakeCurrentDelegate),
+                GlSwapBuffersCb = Marshal.GetFunctionPointerForDelegate(_glSwapBuffersDelegate),
+            };
+
+            Logger.LogInfo(Tag, "Creating app...");
+            _app = NativeMethods.GhosttyAppNew(ref runtimeConfig, _config);
+            Logger.LogInfo(Tag, $"App handle: 0x{_app:X}");
+            if (_app == IntPtr.Zero)
+            {
+                Logger.LogCritical(Tag, "ghostty_app_new returned null");
+                NativeMethods.GhosttyConfigFree(_config);
+                _config = IntPtr.Zero;
+                return false;
+            }
+
+            Logger.LogInfo(Tag, $"Setting color scheme: {colorScheme}");
+            NativeMethods.GhosttyAppSetColorScheme(_app, colorScheme);
+
+            Logger.LogInfo(Tag, "Initialize complete!");
+            return true;
+        }
+        catch (Exception ex)
         {
-            NativeMethods.GhosttyConfigFree(_config);
-            _config = IntPtr.Zero;
+            Logger.LogCritical(Tag, $"Initialize exception: {ex}");
             return false;
         }
-
-        // Set initial color scheme
-        NativeMethods.GhosttyAppSetColorScheme(_app, colorScheme);
-
-        return true;
     }
 
     public void Tick()
@@ -120,6 +176,8 @@ public sealed class GhosttyApp : IDisposable
 
     private bool OnAction(IntPtr app, GhosttyTarget target, GhosttyAction action)
     {
+        Logger.LogDebug(Tag, $"OnAction: {action.Tag}");
+
         switch (action.Tag)
         {
             case GhosttyActionTag.SetTitle:
@@ -153,6 +211,7 @@ public sealed class GhosttyApp : IDisposable
 
             case GhosttyActionTag.InitialSize:
             {
+                Logger.LogInfo(Tag, $"InitialSize: {action.Action.InitialSize.Width}x{action.Action.InitialSize.Height}");
                 InitialSizeReceived?.Invoke(
                     action.Action.InitialSize.Width,
                     action.Action.InitialSize.Height);
@@ -161,6 +220,7 @@ public sealed class GhosttyApp : IDisposable
 
             case GhosttyActionTag.CellSize:
             {
+                Logger.LogInfo(Tag, $"CellSize: {action.Action.CellSize.Width}x{action.Action.CellSize.Height}");
                 CellSizeReceived?.Invoke(
                     action.Action.CellSize.Width,
                     action.Action.CellSize.Height);
@@ -296,6 +356,7 @@ public sealed class GhosttyApp : IDisposable
             return;
 
         _disposed = true;
+        Logger.LogInfo(Tag, "Disposing GhosttyApp");
 
         if (_app != IntPtr.Zero)
         {
