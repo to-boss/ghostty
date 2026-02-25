@@ -12,6 +12,18 @@ const log = std.log.scoped(.os_locale);
 pub fn ensureLocale(alloc: std.mem.Allocator) !void {
     assert(builtin.link_libc);
 
+    // On Windows, the POSIX locale model (LANG env var, LC_ALL=6) doesn't
+    // apply. We just call setlocale(LC_ALL, "") with the correct Windows
+    // constant to set the CRT locale to the user's system default.
+    if (comptime builtin.os.tag == .windows) {
+        if (setlocale(LC_ALL, "")) |v| {
+            log.info("setlocale from system default result={s}", .{v});
+        } else {
+            log.warn("setlocale failed on Windows, using C locale", .{});
+        }
+        return;
+    }
+
     // Get our LANG env var. We use this many times but we also need
     // the original value later.
     const lang = try internal_os.getenv(alloc, "LANG");
@@ -210,7 +222,7 @@ fn preferredLanguageFromCocoa(
     return slice[0 .. slice.len - 1 :0];
 }
 
-const LC_ALL: c_int = 6; // from locale.h
+const LC_ALL: c_int = if (builtin.os.tag == .windows) 0 else 6; // from locale.h (0 on Windows, 6 on POSIX)
 const LC_ALL_MASK: c_int = 0x7fffffff; // from locale.h
 const locale_t = ?*anyopaque;
 extern "c" fn setlocale(category: c_int, locale: ?[*]const u8) ?[*:0]u8;
