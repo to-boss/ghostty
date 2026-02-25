@@ -50,7 +50,7 @@ public partial class MainWindow : FluentWindow
                 $"Failed to initialize Ghostty.\n\nCheck the debug log:\n{logPath}",
                 "Error",
                 System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
-            Close();
+            Dispatcher.BeginInvoke(Close, System.Windows.Threading.DispatcherPriority.Background);
             return;
         }
         Logger.LogInfo(LogTag, "GhosttyApp initialized successfully");
