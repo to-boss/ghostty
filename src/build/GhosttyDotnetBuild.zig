@@ -8,6 +8,7 @@ const GhosttyLib = @import("GhosttyLib.zig");
 
 build: *std.Build.Step.Run,
 copy: *std.Build.Step.Run,
+copy_dll: *std.Build.Step.Run,
 
 pub const Deps = struct {
     lib: *const GhosttyLib,
@@ -59,13 +60,26 @@ pub fn init(
         break :copy step;
     };
 
+    // Copy the native ghostty.dll as libghostty.dll alongside the app.
+    // Renamed to avoid case-insensitive collision with the managed Ghostty.dll.
+    const copy_dll = copy_dll: {
+        const step = RunStep.create(b, "copy native dll");
+        step.has_side_effects = true;
+        step.addArgs(&.{ "cmd", "/C", "copy", "/Y" });
+        step.addFileArg(deps.lib.output);
+        step.addArg(b.fmt("{s}\\Ghostty\\libghostty.dll", .{b.install_path}));
+        step.step.dependOn(&copy.step);
+        break :copy_dll step;
+    };
+
     return .{
         .build = build_step,
         .copy = copy,
+        .copy_dll = copy_dll,
     };
 }
 
 pub fn install(self: *const Ghostty) void {
-    const b = self.copy.step.owner;
-    b.getInstallStep().dependOn(&self.copy.step);
+    const b = self.copy_dll.step.owner;
+    b.getInstallStep().dependOn(&self.copy_dll.step);
 }
