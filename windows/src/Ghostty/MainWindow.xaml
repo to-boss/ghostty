@@ -8,7 +8,8 @@
         MinWidth="320"
         MinHeight="240"
         WindowBackdropType="Mica"
-        ExtendsContentIntoTitleBar="True">
+        ExtendsContentIntoTitleBar="True"
+        Icon="pack://application:,,,/Assets/ghostty.ico">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -18,7 +19,11 @@
         <ui:TitleBar Grid.Row="0"
                      Title="Ghostty"
                      ShowMaximize="True"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Assets/ghostty.ico" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Border Grid.Row="1"
                 x:Name="TerminalHost"

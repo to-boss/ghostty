@@ -8,6 +8,7 @@
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\..\dist\windows\ghostty.ico</ApplicationIcon>
     <RootNamespace>Ghostty</RootNamespace>
     <AssemblyName>Ghostty</AssemblyName>
     <SupportedOSPlatformVersion>10.0.18362.0</SupportedOSPlatformVersion>
@@ -15,6 +16,10 @@
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\..\dist\windows\ghostty.ico" Link="Assets\ghostty.ico" />
   </ItemGroup>
 
 </Project>
