@@ -20,6 +20,7 @@ public class TerminalControl : HwndHost
     private IntPtr _hwnd;
     private IntPtr _surface;
     private OpenGLContext? _glContext;
+    private bool _surfaceCreated;
     private bool _disposed;
 
     public TerminalControl(GhosttyApp ghosttyApp)
@@ -68,16 +69,9 @@ public class TerminalControl : HwndHost
         }
         Logger.LogInfo(LogTag, "OpenGL context initialized");
 
-        // Make current so we can create the surface
-        _glContext.MakeCurrent();
-
-        // Create the ghostty surface
-        CreateSurface();
-
-        // Release GL context from UI thread so the renderer thread can use it
-        _glContext.ReleaseCurrent();
-
         // Hook into the HwndSource for raw Win32 messages
+        // NOTE: Surface creation is deferred to OnRenderSizeChanged,
+        // where ActualWidth/ActualHeight are available.
         var source = HwndSource.FromHwnd(hwndParent.Handle);
         source?.AddHook(WndProcHook);
 
@@ -85,7 +79,7 @@ public class TerminalControl : HwndHost
         return new HandleRef(this, _hwnd);
     }
 
-    private void CreateSurface()
+    private void CreateSurface(uint width, uint height, double dpiScale)
     {
         Logger.LogInfo(LogTag, "CreateSurface: begin");
 
@@ -98,17 +92,8 @@ public class TerminalControl : HwndHost
             Windows = new GhosttyPlatformWindows { Hwnd = _hwnd }
         };
 
-        // Set DPI scale
-        var source = PresentationSource.FromVisual(this);
-        double dpiScale = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
         surfaceConfig.ScaleFactor = dpiScale;
-
         surfaceConfig.Context = GhosttySurfaceContext.Window;
-
-        // Pass initial size so the surface starts at the correct dimensions,
-        // avoiding a spurious resize that causes the shell to reprint its prompt.
-        var width = (uint)Math.Max(1, ActualWidth * dpiScale);
-        var height = (uint)Math.Max(1, ActualHeight * dpiScale);
         surfaceConfig.InitialWidth = width;
         surfaceConfig.InitialHeight = height;
 
@@ -155,20 +140,34 @@ public class TerminalControl : HwndHost
     {
         base.OnRenderSizeChanged(sizeInfo);
 
-        if (_hwnd == IntPtr.Zero || _surface == IntPtr.Zero)
+        if (_hwnd == IntPtr.Zero)
             return;
 
         var source = PresentationSource.FromVisual(this);
         double dpiScale = source?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        var width = (uint)Math.Max(1, sizeInfo.NewSize.Width * dpiScale);
+        var height = (uint)Math.Max(1, sizeInfo.NewSize.Height * dpiScale);
 
-        var width = (int)Math.Max(1, sizeInfo.NewSize.Width * dpiScale);
-        var height = (int)Math.Max(1, sizeInfo.NewSize.Height * dpiScale);
+        if (!_surfaceCreated)
+        {
+            // Resize the child HWND first so the renderer thread sees the correct viewport.
+            Win32Interop.MoveWindow(_hwnd, 0, 0, (int)width, (int)height, true);
 
-        // Resize the child HWND
-        Win32Interop.MoveWindow(_hwnd, 0, 0, width, height, true);
+            // First layout pass — now we have the real size.
+            // Make GL current, create surface, release for renderer thread.
+            _glContext!.MakeCurrent();
+            CreateSurface(width, height, dpiScale);
+            _glContext.ReleaseCurrent();
+            _surfaceCreated = true;
+            return;
+        }
 
-        // Notify ghostty of the new size
-        NativeMethods.GhosttySurfaceSetSize(_surface, (uint)width, (uint)height);
+        if (_surface == IntPtr.Zero)
+            return;
+
+        // Subsequent resizes
+        Win32Interop.MoveWindow(_hwnd, 0, 0, (int)width, (int)height, true);
+        NativeMethods.GhosttySurfaceSetSize(_surface, width, height);
         NativeMethods.GhosttySurfaceSetContentScale(_surface, dpiScale, dpiScale);
     }
 
