@@ -481,6 +481,12 @@ pub const Surface = struct {
 
         /// Context for the new surface
         context: apprt.surface.NewSurfaceContext = .window,
+
+        /// Initial surface size in pixels. If both are non-zero, the
+        /// surface starts at this size instead of the default, avoiding
+        /// a spurious resize when the host sets the real size afterward.
+        initial_width: u32 = 0,
+        initial_height: u32 = 0,
     };
 
     pub fn init(self: *Surface, app: *App, opts: Options) !void {
@@ -493,7 +499,10 @@ pub const Surface = struct {
                 .x = @floatCast(opts.scale_factor),
                 .y = @floatCast(opts.scale_factor),
             },
-            .size = .{ .width = 800, .height = 600 },
+            .size = if (opts.initial_width > 0 and opts.initial_height > 0)
+                .{ .width = opts.initial_width, .height = opts.initial_height }
+            else
+                .{ .width = 800, .height = 600 },
             .cursor_pos = .{ .x = -1, .y = -1 },
         };
 

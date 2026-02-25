@@ -269,6 +269,8 @@ public struct GhosttySurfaceConfig
     [MarshalAs(UnmanagedType.U1)]
     public bool WaitAfterCommand;
     public GhosttySurfaceContext Context;
+    public uint InitialWidth;
+    public uint InitialHeight;
 }
 
 // ghostty_surface_size_s

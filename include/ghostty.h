@@ -461,6 +461,8 @@ typedef struct {
   const char* initial_input;
   bool wait_after_command;
   ghostty_surface_context_e context;
+  uint32_t initial_width;
+  uint32_t initial_height;
 } ghostty_surface_config_s;
 
 typedef struct {

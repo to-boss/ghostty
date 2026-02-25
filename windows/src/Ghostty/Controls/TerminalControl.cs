@@ -105,7 +105,14 @@ public class TerminalControl : HwndHost
 
         surfaceConfig.Context = GhosttySurfaceContext.Window;
 
-        Logger.LogInfo(LogTag, $"Surface config: hwnd=0x{_hwnd:X}, dpi={dpiScale}, context={surfaceConfig.Context}");
+        // Pass initial size so the surface starts at the correct dimensions,
+        // avoiding a spurious resize that causes the shell to reprint its prompt.
+        var width = (uint)Math.Max(1, ActualWidth * dpiScale);
+        var height = (uint)Math.Max(1, ActualHeight * dpiScale);
+        surfaceConfig.InitialWidth = width;
+        surfaceConfig.InitialHeight = height;
+
+        Logger.LogInfo(LogTag, $"Surface config: hwnd=0x{_hwnd:X}, dpi={dpiScale}, size={width}x{height}, context={surfaceConfig.Context}");
 
         _surface = NativeMethods.GhosttySurfaceNew(_ghosttyApp.AppHandle, ref surfaceConfig);
         if (_surface == IntPtr.Zero)
@@ -115,10 +122,8 @@ public class TerminalControl : HwndHost
         }
         Logger.LogInfo(LogTag, $"Surface created: 0x{_surface:X}");
 
-        // Set initial size
-        var width = (uint)Math.Max(1, ActualWidth * dpiScale);
-        var height = (uint)Math.Max(1, ActualHeight * dpiScale);
-        Logger.LogInfo(LogTag, $"Initial size: {width}x{height} (dpi={dpiScale})");
+        // Still call SetSize to trigger sizeCallback, but since the size
+        // matches what we passed in the config, it will be a no-op.
         NativeMethods.GhosttySurfaceSetSize(_surface, width, height);
         NativeMethods.GhosttySurfaceSetContentScale(_surface, dpiScale, dpiScale);
         NativeMethods.GhosttySurfaceSetFocus(_surface, true);
