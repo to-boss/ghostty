@@ -233,6 +233,10 @@ pub fn focusGained(
 ) !void {
     _ = self;
 
+    // Termios polling is not supported on Windows (no termios API).
+    // The timer is never started on Windows, so skip all focus tracking.
+    if (comptime builtin.os.tag == .windows) return;
+
     assert(td.backend == .exec);
     const execdata = &td.backend.exec;
 

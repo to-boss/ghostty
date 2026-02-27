@@ -76,6 +76,12 @@ pub const App = struct {
 
         /// Close the current surface given by this function.
         close_surface: ?*const fn (SurfaceUD, bool) callconv(.c) void = null,
+
+        /// Optional GL context callbacks for platforms that manage their
+        /// own OpenGL context (e.g. Windows WPF). If set, the renderer
+        /// will call these instead of managing the GL context itself.
+        gl_make_current: ?*const fn (SurfaceUD) callconv(.c) void = null,
+        gl_swap_buffers: ?*const fn (SurfaceUD) callconv(.c) void = null,
     };
 
     /// This is the key event sent for ghostty_surface_key and
@@ -342,6 +348,7 @@ pub const App = struct {
 pub const Platform = union(PlatformTag) {
     macos: MacOS,
     ios: IOS,
+    windows: Windows,
 
     // If our build target for libghostty is not darwin then we do
     // not include macos support at all.
@@ -355,6 +362,11 @@ pub const Platform = union(PlatformTag) {
         uiview: objc.Object,
     } else void;
 
+    pub const Windows = if (builtin.target.os.tag == .windows) struct {
+        /// The HWND to render the surface on.
+        hwnd: ?*anyopaque,
+    } else void;
+
     // The C ABI compatible version of this union. The tag is expected
     // to be stored elsewhere.
     pub const C = extern union {
@@ -364,6 +376,10 @@ pub const Platform = union(PlatformTag) {
 
         ios: extern struct {
             uiview: ?*anyopaque,
+        },
+
+        windows: extern struct {
+            hwnd: ?*anyopaque,
         },
     };
 
@@ -384,6 +400,11 @@ pub const Platform = union(PlatformTag) {
                     break :ios error.UIViewMustBeSet);
                 break :ios .{ .ios = .{ .uiview = uiview } };
             } else error.UnsupportedPlatform,
+
+            .windows => if (Windows != void) windows: {
+                const config = c_platform.windows;
+                break :windows .{ .windows = .{ .hwnd = config.hwnd } };
+            } else error.UnsupportedPlatform,
         };
     }
 };
@@ -394,6 +415,7 @@ pub const PlatformTag = enum(c_int) {
 
     macos = 1,
     ios = 2,
+    windows = 3,
 };
 
 pub const EnvVar = extern struct {
@@ -459,6 +481,12 @@ pub const Surface = struct {
 
         /// Context for the new surface
         context: apprt.surface.NewSurfaceContext = .window,
+
+        /// Initial surface size in pixels. If both are non-zero, the
+        /// surface starts at this size instead of the default, avoiding
+        /// a spurious resize when the host sets the real size afterward.
+        initial_width: u32 = 0,
+        initial_height: u32 = 0,
     };
 
     pub fn init(self: *Surface, app: *App, opts: Options) !void {
@@ -471,7 +499,10 @@ pub const Surface = struct {
                 .x = @floatCast(opts.scale_factor),
                 .y = @floatCast(opts.scale_factor),
             },
-            .size = .{ .width = 800, .height = 600 },
+            .size = if (opts.initial_width > 0 and opts.initial_height > 0)
+                .{ .width = opts.initial_width, .height = opts.initial_height }
+            else
+                .{ .width = 800, .height = 600 },
             .cursor_pos = .{ .x = -1, .y = -1 },
         };
 

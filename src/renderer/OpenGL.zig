@@ -45,6 +45,14 @@ blending: configpkg.Config.AlphaBlending,
 /// The most recently presented target, in case we need to present it again.
 last_target: ?Target = null,
 
+/// The apprt surface, used for embedded GL callbacks.
+rt_surface: *apprt.Surface,
+
+/// For embedded apprt, we store the screen size so we can set glViewport
+/// ourselves (GTK's GtkGLArea does this automatically, but embedded hosts
+/// don't). Updated via `setScreenSize`, applied in `drawFrameStart`.
+screen_size: struct { width: u32, height: u32 } = .{ .width = 0, .height = 0 },
+
 /// NOTE: This is an error{}!OpenGL instead of just OpenGL for parity with
 ///       Metal, since it needs to be fallible so does this, even though it
 ///       can't actually fail.
@@ -52,6 +60,7 @@ pub fn init(alloc: Allocator, opts: rendererpkg.Options) error{}!OpenGL {
     return .{
         .alloc = alloc,
         .blending = opts.config.blending,
+        .rt_surface = opts.rt_surface,
     };
 }
 
@@ -170,9 +179,10 @@ pub fn surfaceInit(surface: *apprt.Surface) !void {
         => try prepareContext(null),
 
         apprt.embedded => {
-            // TODO(mitchellh): this does nothing today to allow libghostty
-            // to compile for OpenGL targets but libghostty is strictly
-            // broken for rendering on this platforms.
+            // The host (e.g. Windows WPF) has already made the GL context
+            // current before calling surface_new, so we can load GL
+            // function pointers right away.
+            try prepareContext(null);
         },
     }
 
@@ -191,12 +201,19 @@ pub fn surfaceInit(surface: *apprt.Surface) !void {
 pub fn finalizeSurfaceInit(self: *const OpenGL, surface: *apprt.Surface) !void {
     _ = self;
     _ = surface;
+
+    // For embedded apprt on Windows, release the GL context from the main
+    // thread so the renderer thread can acquire it. The main thread made
+    // the context current for surfaceInit (GLAD loading + shader compilation),
+    // and now the renderer thread needs to take ownership via gl_make_current.
+    if (comptime apprt.runtime == apprt.embedded and builtin.os.tag == .windows) {
+        _ = wglMakeCurrent(null, null);
+    }
 }
 
 /// Callback called by renderer.Thread when it begins.
 pub fn threadEnter(self: *const OpenGL, surface: *apprt.Surface) !void {
     _ = self;
-    _ = surface;
 
     switch (apprt.runtime) {
         else => @compileError("unsupported app runtime for OpenGL"),
@@ -209,9 +226,17 @@ pub fn threadEnter(self: *const OpenGL, surface: *apprt.Surface) !void {
         },
 
         apprt.embedded => {
-            // TODO(mitchellh): this does nothing today to allow libghostty
-            // to compile for OpenGL targets but libghostty is strictly
-            // broken for rendering on this platforms.
+            // Make the GL context current on this renderer thread via
+            // the host-provided callback, then reload GL bindings.
+            log.debug("threadEnter: calling gl_make_current callback", .{});
+            if (surface.app.opts.gl_make_current) |cb| {
+                cb(surface.userdata);
+            }
+            // GLAD context is threadlocal, so we must reload GL function
+            // pointers on this renderer thread after making GL current.
+            log.debug("threadEnter: reloading GLAD on renderer thread", .{});
+            try prepareContext(null);
+            log.debug("threadEnter: GLAD reload complete", .{});
         },
     }
 }
@@ -228,9 +253,7 @@ pub fn threadExit(self: *const OpenGL) void {
             // be sharing the global bindings with other windows.
         },
 
-        apprt.embedded => {
-            // TODO: see threadEnter
-        },
+        apprt.embedded => {},
     }
 }
 
@@ -249,11 +272,26 @@ pub fn displayRealized(self: *const OpenGL) void {
     }
 }
 
+/// Called when the screen size changes (e.g. from a resize message).
+/// For embedded apprt, we store this so we can call glViewport ourselves.
+pub fn setScreenSize(self: *OpenGL, width: u32, height: u32) void {
+    self.screen_size = .{ .width = width, .height = height };
+}
+
 /// Actions taken before doing anything in `drawFrame`.
-///
-/// Right now there's nothing we need to do for OpenGL.
 pub fn drawFrameStart(self: *OpenGL) void {
-    _ = self;
+    // For embedded apprt, we must set glViewport ourselves since there's
+    // no toolkit (like GTK's GtkGLArea) doing it for us.
+    if (comptime apprt.runtime == apprt.embedded) {
+        if (self.screen_size.width > 0 and self.screen_size.height > 0) {
+            gl.glad.context.Viewport.?(
+                0,
+                0,
+                @intCast(self.screen_size.width),
+                @intCast(self.screen_size.height),
+            );
+        }
+    }
 }
 
 /// Actions taken after `drawFrame` is done.
@@ -280,6 +318,7 @@ pub fn surfaceSize(self: *const OpenGL) !struct { width: u32, height: u32 } {
     _ = self;
     var viewport: [4]gl.c.GLint = undefined;
     gl.glad.context.GetIntegerv.?(gl.c.GL_VIEWPORT, &viewport);
+    log.debug("surfaceSize: GL_VIEWPORT={},{},{},{}", .{ viewport[0], viewport[1], viewport[2], viewport[3] });
     return .{
         .width = @intCast(viewport[2]),
         .height = @intCast(viewport[3]),
@@ -328,6 +367,15 @@ pub fn present(self: *OpenGL, target: Target) !void {
 
     // Keep track of this target in case we need to repeat it.
     self.last_target = target;
+
+    // For embedded apprt, the host manages the GL context and buffer
+    // swapping, so we call the swap buffers callback.
+    if (comptime apprt.runtime == apprt.embedded) {
+        log.debug("present: calling gl_swap_buffers target={}x{}", .{ target.width, target.height });
+        if (self.rt_surface.app.opts.gl_swap_buffers) |cb| {
+            cb(self.rt_surface.userdata);
+        }
+    }
 }
 
 /// Present the last presented target again.
@@ -459,3 +507,11 @@ pub inline fn beginFrame(
     _ = self;
     return try Frame.begin(.{}, renderer, target);
 }
+
+/// Windows WGL extern for releasing the GL context from the current thread.
+const wglMakeCurrent = if (builtin.os.tag == .windows)
+    struct {
+        extern "opengl32" fn wglMakeCurrent(hdc: ?*anyopaque, hglrc: ?*anyopaque) callconv(.c) i32;
+    }.wglMakeCurrent
+else
+    void;

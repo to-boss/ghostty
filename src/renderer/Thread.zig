@@ -492,6 +492,13 @@ fn changeConfig(self: *Thread, config: *const DerivedConfig) !void {
 /// Trigger a draw. This will not update frame data or anything, it will
 /// just trigger a draw/paint.
 fn drawFrame(self: *Thread, now: bool) void {
+    log.debug("drawFrame: now={} visible={} vsync={} must_draw_from_app={}", .{
+        now,
+        self.flags.visible,
+        self.renderer.hasVsync(),
+        must_draw_from_app_thread,
+    });
+
     // If we're invisible, we do not draw.
     if (!self.flags.visible) return;
 
@@ -505,6 +512,7 @@ fn drawFrame(self: *Thread, now: bool) void {
             .{ .instant = {} },
         );
     } else {
+        log.debug("drawFrame: calling renderer.drawFrame", .{});
         self.renderer.drawFrame(false) catch |err|
             log.warn("error drawing err={}", .{err});
     }
@@ -522,6 +530,7 @@ fn wakeupCallback(
     };
 
     const t = self_.?;
+    log.debug("wakeupCallback fired", .{});
 
     // When we wake up, we check the mailbox. Mailbox producers should
     // wake up our thread after publishing.

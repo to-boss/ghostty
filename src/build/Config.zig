@@ -58,6 +58,7 @@ emit_test_exe: bool = false,
 emit_themes: bool = false,
 emit_xcframework: bool = false,
 emit_webdata: bool = false,
+emit_windows_app: bool = false,
 emit_unicode_table_gen: bool = false,
 
 /// Environmental properties
@@ -413,6 +414,17 @@ pub fn init(b: *std.Build, appVersion: []const u8) !Config {
         "emit-macos-app",
         "Build and install the macOS app bundle.",
     ) orelse config.emit_xcframework;
+
+    config.emit_windows_app = b.option(
+        bool,
+        "emit-windows-app",
+        "Build and install the Windows WPF app.",
+    ) orelse (builtin.target.os.tag == .windows and
+        target.result.os.tag == .windows and
+        config.app_runtime == .none and
+        (!config.emit_bench and
+            !config.emit_test_exe and
+            !config.emit_helpgen));
 
     //---------------------------------------------------------------
     // System Packages
